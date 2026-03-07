@@ -8,6 +8,7 @@ import zipfile
 import io
 import sys
 import requests  # عشان التليجرام
+import shutil
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
 from werkzeug.security import check_password_hash
 from datetime import datetime as dt, timedelta
@@ -27,24 +28,29 @@ app.secret_key = 'hayah_atelier_secret_key_12345'
 TELEGRAM_TOKEN = "8376528591:AAHZ8eDXukOoCzJO2ivBUdWdtgOJGE-iTUM"
 TELEGRAM_CHAT_IDS = ["7075915087", "5267495549"]
 
-# --- NEW FUNCTION TO GET CORRECT FILE PATH ---
-def get_file_path(folder, filename):
-    if os.environ.get('VERCEL'):
-        return os.path.join('/tmp', filename)
-    
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-    return os.path.join(folder, filename)
+# --- START: Vercel File System Fix ---
+IS_VERCEL = os.environ.get('VERCEL') == '1'
+project_data_folder = os.path.join(base_dir, 'data')
+data_folder = '/tmp' if IS_VERCEL else project_data_folder
 
-# إعدادات الصور
-UPLOAD_FOLDER = get_file_path(os.path.join(static_dir, 'dress_images'), '')
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+if IS_VERCEL:
+    # Create /tmp if it doesn't exist
+    if not os.path.exists(data_folder):
+        os.makedirs(data_folder)
+    # Copy existing data from project's data folder to /tmp
+    if os.path.exists(project_data_folder):
+        for filename in os.listdir(project_data_folder):
+            source_file = os.path.join(project_data_folder, filename)
+            target_file = os.path.join(data_folder, filename)
+            if os.path.isfile(source_file):
+                shutil.copy2(source_file, target_file)
+
+UPLOAD_FOLDER = '/tmp/dress_images' if IS_VERCEL else os.path.join(static_dir, 'dress_images')
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-if not os.path.exists(UPLOAD_FOLDER): os.makedirs(UPLOAD_FOLDER)
-
-# مجلد البيانات
-data_folder = get_file_path(os.path.join(base_dir, 'data'), '')
-if not os.path.exists(data_folder): os.makedirs(data_folder)
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+# --- END: Vercel File System Fix ---
 
 # تعريف الملفات
 FILES = {
@@ -79,10 +85,13 @@ def get_now_timestamp(): return dt.now(pytz.timezone("Africa/Cairo")).strftime("
 
 def init_file(key):
     try:
+        # This function now only creates a file if it doesn't exist at all.
+        # The Vercel-specific copy logic is handled above.
         if not os.path.exists(FILES[key]):
             with open(FILES[key], 'w', newline='', encoding='utf-8') as f:
                 csv.DictWriter(f, fieldnames=FIELDS[key]).writeheader()
-    except: pass
+    except Exception as e:
+        print(f"Could not initialize file for key {key}: {e}")
 
 def read_data(key):
     init_file(key)
@@ -91,6 +100,7 @@ def read_data(key):
     except: return []
 
 def write_data(key, data):
+    init_file(key)
     try:
         with open(FILES[key], 'w', newline='', encoding='utf-8') as f:
             w = csv.DictWriter(f, fieldnames=FIELDS[key])
@@ -274,9 +284,10 @@ def record_pickup(rental_id):
 def login():
     if is_logged_in(): return redirect(url_for('index'))
     if request.method == 'POST':
-        if check_user(request.form['username'], request.form['password']):
-            session['username'] = request.form['username']
-            session['role'] = check_user(request.form['username'], request.form['password'])['role']
+        user = check_user(request.form['username'], request.form['password'])
+        if user:
+            session['username'] = user['username']
+            session['role'] = user['role']
             return redirect(url_for('index'))
         flash('بيانات خاطئة', 'danger')
     return render_template('login.html')
@@ -424,7 +435,8 @@ def employee_report():
 def confirm_delete_employee(employee_name):
     if not is_manager(): return redirect(url_for('index'))
     if request.method == 'POST':
-        if check_user(session.get('username'), request.form.get('password')):
+        user = check_user(session.get('username'), request.form.get('password'))
+        if user:
             write_data('employees', [e for e in read_data('employees') if e['employee_name']!=employee_name])
             return redirect(url_for('employee_report'))
         flash('خطأ في كلمة المرور', 'danger')
@@ -538,9 +550,13 @@ def download_backup():
     if not is_manager(): return redirect(url_for('index'))
     mem = io.BytesIO()
     with zipfile.ZipFile(mem, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # When creating a backup, read from the authoritative source (/tmp on Vercel)
         for k, p in FILES.items():
             if os.path.exists(p): zf.write(p, os.path.basename(p))
-        for root, dirs, files in os.walk(UPLOAD_FOLDER):
-            for file in files: zf.write(os.path.join(root, file), os.path.join('dress_images', file))
+        
+        # Also include uploaded images
+        if os.path.exists(UPLOAD_FOLDER):
+            for root, dirs, files in os.walk(UPLOAD_FOLDER):
+                for file in files: zf.write(os.path.join(root, file), os.path.join('dress_images', file))
     mem.seek(0)
     return send_file(mem, mimetype='application/zip', as_attachment=True, download_name=f'Backup_{get_today_date()}.zip')
