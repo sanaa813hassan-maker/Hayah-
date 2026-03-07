@@ -89,6 +89,8 @@ def write_data(key, data):
             w.writerows(data)
     except: pass
 
+for k in FILES: init_file(k)
+
 def allowed_file(filename): return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def process_image(file, dress_id):
@@ -533,7 +535,3 @@ def download_backup():
             for file in files: zf.write(os.path.join(root, file), os.path.join('dress_images', file))
     mem.seek(0)
     return send_file(mem, mimetype='application/zip', as_attachment=True, download_name=f'Backup_{get_today_date()}.zip')
-
-if __name__ == '__main__':
-    for k in FILES: init_file(k)
-    app.run(debug=True, host='0.0.0.0', port=5000)
