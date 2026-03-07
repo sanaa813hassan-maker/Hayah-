@@ -10,14 +10,18 @@ import sys
 import requests  # عشان التليجرام
 import shutil
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime as dt, timedelta
 import calendar
 import pytz
 from PIL import Image, ImageOps
 
+# --- 0. Logging ---
+print("--- Application Starting ---")
+
 # --- 1. إعداد المسارات (ديناميكي) ---
 base_dir = os.path.abspath(os.path.dirname(__file__))
+print(f"Base directory: {base_dir}")
 template_dir = os.path.join(base_dir, 'templates')
 static_dir = os.path.join(base_dir, 'static')
 
@@ -30,22 +34,26 @@ TELEGRAM_CHAT_IDS = ["7075915087", "5267495549"]
 
 # --- START: Vercel File System Fix ---
 IS_VERCEL = os.environ.get('VERCEL') == '1'
+print(f"Running on Vercel: {IS_VERCEL}")
 project_data_folder = os.path.join(base_dir, 'data')
 data_folder = '/tmp' if IS_VERCEL else project_data_folder
+print(f"Project data folder: {project_data_folder}")
+print(f"Data folder: {data_folder}")
 
 if IS_VERCEL:
-    # Create /tmp if it doesn't exist
     if not os.path.exists(data_folder):
         os.makedirs(data_folder)
-    # Copy existing data from project's data folder to /tmp
     if os.path.exists(project_data_folder):
+        print("Copying data files to /tmp...")
         for filename in os.listdir(project_data_folder):
             source_file = os.path.join(project_data_folder, filename)
             target_file = os.path.join(data_folder, filename)
             if os.path.isfile(source_file):
+                print(f"Copying {source_file} to {target_file}")
                 shutil.copy2(source_file, target_file)
 
 UPLOAD_FOLDER = '/tmp/dress_images' if IS_VERCEL else os.path.join(static_dir, 'dress_images')
+print(f"Upload folder: {UPLOAD_FOLDER}")
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -65,6 +73,7 @@ FILES = {
     'deductions': os.path.join(data_folder, 'deductions.csv'),
     'withdrawals': os.path.join(data_folder, 'owner_withdrawals.csv')
 }
+print(f"File paths: {FILES}")
 
 FIELDS = {
     'rentals': ['rental_id', 'client_name', 'phone', 'dress_name', 'total_price', 'paid_amount', 'due_date', 'employee_name', 'rental_timestamp', 'chest', 'waist', 'hips', 'arm', 'payment_method', 'insurance_deposit', 'card_deposit', 'card_holder_name', 'notes', 'status', 'pickup_notes', 'discount'],
@@ -85,19 +94,22 @@ def get_now_timestamp(): return dt.now(pytz.timezone("Africa/Cairo")).strftime("
 
 def init_file(key):
     try:
-        # This function now only creates a file if it doesn't exist at all.
-        # The Vercel-specific copy logic is handled above.
-        if not os.path.exists(FILES[key]):
-            with open(FILES[key], 'w', newline='', encoding='utf-8') as f:
+        filepath = FILES[key]
+        if not os.path.exists(filepath):
+            print(f"File {filepath} does not exist. Creating it.")
+            with open(filepath, 'w', newline='', encoding='utf-8') as f:
                 csv.DictWriter(f, fieldnames=FIELDS[key]).writeheader()
     except Exception as e:
-        print(f"Could not initialize file for key {key}: {e}")
+        print(f"ERROR in init_file for key {key}: {e}")
 
 def read_data(key):
     init_file(key)
     try:
-        with open(FILES[key], 'r', encoding='utf-8') as f: return list(csv.DictReader(f))
-    except: return []
+        with open(FILES[key], 'r', encoding='utf-8') as f:
+            return list(csv.DictReader(f))
+    except Exception as e:
+        print(f"ERROR in read_data for key {key}: {e}")
+        return []
 
 def write_data(key, data):
     init_file(key)
@@ -106,9 +118,12 @@ def write_data(key, data):
             w = csv.DictWriter(f, fieldnames=FIELDS[key])
             w.writeheader()
             w.writerows(data)
-    except: pass
+    except Exception as e:
+        print(f"ERROR in write_data for key {key}: {e}")
 
+print("Initializing files...")
 for k in FILES: init_file(k)
+print("File initialization complete.")
 
 def allowed_file(filename): return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -140,10 +155,28 @@ def is_logged_in(): return 'username' in session
 def is_manager(): return is_logged_in() and session.get('role') == 'manager'
 
 def check_user(u, p):
-    if u == "hayah_manager" and p == "FzX156555": return {'username': 'hayah_manager', 'role': 'manager'}
-    if u == "Staff" and p == "EmpPass456": return {'username': 'Staff', 'role': 'employee'}
+    print(f"Checking user: {u}")
+    # Hardcoded users
+    if u == "hayah_manager" and p == "FzX156555":
+        print("User is hayah_manager")
+        return {'username': 'hayah_manager', 'role': 'manager'}
+    if u == "Staff" and p == "EmpPass456":
+        print("User is Staff")
+        return {'username': 'Staff', 'role': 'employee'}
+    
+    # Check from users.csv
     users = read_data('users')
-    return next((x for x in users if x['username'] == u and check_password_hash(x['password'], p)), None)
+    print(f"Users from file: {users}")
+    for user in users:
+        if user.get('username') == u:
+            print(f"Found user {u} in file. Checking password.")
+            if check_password_hash(user.get('password'), p):
+                print(f"Password for {u} is correct.")
+                return user
+            else:
+                print(f"Password for {u} is incorrect.")
+    print(f"User {u} not found or password incorrect.")
+    return None
 
 # --- 4. فحص التعارض (Conflict Check - الميزة المفقودة) ---
 @app.route('/check_dress_availability', methods=['GET'])
@@ -282,15 +315,26 @@ def record_pickup(rental_id):
 # --- باقي الروابط (كما هي بدون تغيير، لكن تأكد من وجودها) ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if is_logged_in(): return redirect(url_for('index'))
-    if request.method == 'POST':
-        user = check_user(request.form['username'], request.form['password'])
-        if user:
-            session['username'] = user['username']
-            session['role'] = user['role']
+    try:
+        print("Login route accessed.")
+        if is_logged_in():
+            print("User already logged in. Redirecting to index.")
             return redirect(url_for('index'))
-        flash('بيانات خاطئة', 'danger')
-    return render_template('login.html')
+        if request.method == 'POST':
+            print(f"Login attempt with username: {request.form.get('username')}")
+            user = check_user(request.form['username'], request.form['password'])
+            if user:
+                print(f"Login successful for user: {user['username']}")
+                session['username'] = user['username']
+                session['role'] = user['role']
+                return redirect(url_for('index'))
+            else:
+                print("Login failed.")
+                flash('بيانات خاطئة', 'danger')
+        return render_template('login.html')
+    except Exception as e:
+        print(f"FATAL ERROR in login route: {e}")
+        return "An internal error occurred.", 500
 
 @app.route('/logout')
 def logout(): session.clear(); return redirect(url_for('login'))
@@ -373,7 +417,7 @@ def profit_report():
 def income_report():
     if not is_manager(): return redirect(url_for('index'))
     today = get_today_date()
-    rtype = request.form.get('report_type', 'daily') if request.method=='POST' else 'daily'
+    rtype = request.form..get('report_type', 'daily') if request.method=='POST' else 'daily'
     sdate = request.form.get('selected_date', today) if request.method=='POST' else today
     start, end = sdate, sdate
     if rtype == 'weekly':
@@ -545,16 +589,14 @@ def deductions_report(employee_name):
     if not is_manager(): return redirect(url_for('index'))
     deds = [d for d in read_data('deductions') if d['employee_name']==employee_name]
     return render_template('deductions_report.html', deductions=deds, employee_name=employee_name, total=sum(float(d['amount']) for d in deds))
+
 @app.route('/download_backup')
 def download_backup():
     if not is_manager(): return redirect(url_for('index'))
     mem = io.BytesIO()
     with zipfile.ZipFile(mem, 'w', zipfile.ZIP_DEFLATED) as zf:
-        # When creating a backup, read from the authoritative source (/tmp on Vercel)
         for k, p in FILES.items():
             if os.path.exists(p): zf.write(p, os.path.basename(p))
-        
-        # Also include uploaded images
         if os.path.exists(UPLOAD_FOLDER):
             for root, dirs, files in os.walk(UPLOAD_FOLDER):
                 for file in files: zf.write(os.path.join(root, file), os.path.join('dress_images', file))
