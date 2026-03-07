@@ -27,14 +27,23 @@ app.secret_key = 'hayah_atelier_secret_key_12345'
 TELEGRAM_TOKEN = "8376528591:AAHZ8eDXukOoCzJO2ivBUdWdtgOJGE-iTUM"
 TELEGRAM_CHAT_IDS = ["7075915087", "5267495549"]
 
+# --- NEW FUNCTION TO GET CORRECT FILE PATH ---
+def get_file_path(folder, filename):
+    if os.environ.get('VERCEL'):
+        return os.path.join('/tmp', filename)
+    
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    return os.path.join(folder, filename)
+
 # إعدادات الصور
-UPLOAD_FOLDER = os.path.join(static_dir, 'dress_images')
+UPLOAD_FOLDER = get_file_path(os.path.join(static_dir, 'dress_images'), '')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER): os.makedirs(UPLOAD_FOLDER)
 
 # مجلد البيانات
-data_folder = os.path.join(base_dir, 'data')
+data_folder = get_file_path(os.path.join(base_dir, 'data'), '')
 if not os.path.exists(data_folder): os.makedirs(data_folder)
 
 # تعريف الملفات
