@@ -30,7 +30,7 @@
     <div class="glass-card fade-in" style="position: relative; overflow: hidden;">
 
         <div style="position: absolute; right: 0; top: 0; bottom: 0; width: 6px;
-             background: {{ 'var(--success)' if rental.status == 'تم الاستلام' else 'var(--accent-pink)' }};">
+             background: {{ ''var(--success)'' if rental.status == 'تم الاستلام' else ''var(--accent-pink)'' }};">
         </div>
 
         <div style="margin-right: 15px;"> <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
@@ -45,9 +45,9 @@
                     font-size: 11px;
                     padding: 4px 8px;
                     border-radius: 20px;
-                    background: {{ 'rgba(50, 215, 75, 0.2)' if rental.status == 'تم الاستلام' else 'rgba(191, 90, 242, 0.2)' }};
-                    color: {{ 'var(--success)' if rental.status == 'تم الاستلام' else 'var(--accent-pink)' }};
-                    border: 1px solid {{ 'var(--success)' if rental.status == 'تم الاستلام' else 'var(--accent-pink)' }};
+                    background: {{ ''rgba(50, 215, 75, 0.2)'' if rental.status == 'تم الاستلام' else ''rgba(191, 90, 242, 0.2)'' }};
+                    color: {{ ''var(--success)'' if rental.status == 'تم الاستلام' else ''var(--accent-pink)'' }};
+                    border: 1px solid {{ ''var(--success)'' if rental.status == 'تم الاستلام' else ''var(--accent-pink)'' }};
                 ">
                     {{ rental.status }}
                 </span>
@@ -75,7 +75,7 @@
                 </div>
                 <div>
                     <span style="color: var(--text-secondary); font-size: 12px;">المتبقي</span>
-                    <div style="color: {{ 'var(--danger)' if rental.remaining_balance > 0 else 'var(--text-secondary)' }}; font-weight: bold;">
+                    <div style="color: {{ ''var(--danger)'' if rental.remaining_balance > 0 else ''var(--text-secondary)'' }}; font-weight: bold;">
                         {{ rental.remaining_balance }} ج
                     </div>
                 </div>
