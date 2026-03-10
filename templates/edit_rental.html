@@ -2,7 +2,7 @@
 {% block content %}
 <div class="fade-in">
     <h2 style="text-align: center; margin-bottom: 20px;">تعديل حجز</h2>
-    <form method="POST">
+    <form method="POST" accept-charset="UTF-8">
         <div class="glass-card">
             <label class="text-muted">العميل</label><input type="text" name="client_name" value="{{ rental.client_name }}" required>
             <label class="text-muted">الهاتف</label><input type="tel" name="phone" value="{{ rental.phone }}" required>
