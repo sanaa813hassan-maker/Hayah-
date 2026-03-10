@@ -1,1 +1,1 @@
-withdrawal_id,owner_name,date,amount,reason
+id,withdrawal_date,amount,reason

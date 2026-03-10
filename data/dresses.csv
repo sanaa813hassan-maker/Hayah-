@@ -1,1 +1,1 @@
-dress_id,dress_name,base_price,status,image
+id,name,type,color,purchase_price,purchase_date,rental_price

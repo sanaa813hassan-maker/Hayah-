@@ -1,1 +1,1 @@
-employee_name,amount_paid,date
+id,employee_id,payment_date,amount,payment_type

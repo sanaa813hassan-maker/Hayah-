@@ -1,1 +1,1 @@
-expense_id,description,amount,date
+id,expense_type,amount,date,description
